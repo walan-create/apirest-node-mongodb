@@ -1,6 +1,8 @@
 // ---------------------- Imports ----------------------
 import express from "express";
 import Curso from "../models/curso.model.js";
+import verificarToken from "../middlewares/auth.middleware.js";
+
 
 // ---------------------- Router -----------------------
 const ruta = express.Router();
@@ -10,7 +12,7 @@ const ruta = express.Router();
 // -----------------------------------------------------
 
 // GET ALL 
-ruta.get('/', (req, res) => {
+ruta.get('/', verificarToken, (req, res) => {
     let resultado = listarCursosActivos();
     resultado
         .then(cursos => {
@@ -22,7 +24,7 @@ ruta.get('/', (req, res) => {
 });
 
 // POST
-ruta.post('/', (req, res) => {
+ruta.post('/',  verificarToken,(req, res) => {
     let resultado = crearCurso(req.body);
     resultado
         .then(curso => {
@@ -34,7 +36,7 @@ ruta.post('/', (req, res) => {
 });
 
 // PUT
-ruta.put('/:id', (req, res) => {
+ruta.put('/:id',  verificarToken,(req, res) => {
     let resultado = actualizarCurso(req.params.id, req.body);
     resultado
         .then(curso => {
@@ -49,7 +51,7 @@ ruta.put('/:id', (req, res) => {
  * DELETE /:id
  * Desactiva un curso por su ID (estado = false)
  */
-ruta.delete('/:id', (req, res) => {
+ruta.delete('/:id',  verificarToken,(req, res) => {
     let resultado = desactivarCurso(req.params.id);
     resultado
         .then(curso => {

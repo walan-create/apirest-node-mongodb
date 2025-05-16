@@ -2,6 +2,11 @@
 import express from "express";
 import Usuario from "../models/usuario.model.js";
 import Joi from "joi";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import config from 'config';
+import verificarToken from "../middlewares/auth.middleware.js";
+
 
 // ---------------------- Router -----------------------
 const ruta = express.Router();
@@ -30,7 +35,7 @@ const usuarioSchemaJoi = Joi.object({
 // ---------------------------------------------------
 
 // GET: Listar todos los usuarios activos
-ruta.get("/", (req, res) => {
+ruta.get("/",verificarToken, (req, res) => {
     let resultado = listarUsuariosActivos();
     resultado
         .then((usuarios) => {
@@ -46,29 +51,36 @@ ruta.get("/", (req, res) => {
 });
 
 // POST: Crear un nuevo usuario
-ruta.post("/", (req, res) => {
-    const { error } = usuarioSchemaJoi.validate(req.body);
+ruta.post("/", async (req, res) => {
+    let body = req.body;
+
+    // Validar con Joi primero
+    const { error } = usuarioSchemaJoi.validate(body);
     if (error) {
         return res.status(400).json({ error: error.details[0].message });
     }
-    let body = req.body;
-    let resultado = crearUsuario(body);
 
-    resultado
-        .then((usuario) => {
-            res.json({
-                actualizado: usuario,
-            });
-        })
-        .catch((err) => {
-            res.status(400).json({
-                err: err,
-            });
+    const user = await Usuario.findOne({ email: body.email });
+    if (user) {
+        return res.status(400).json({ msj: "El usuario ya existe" });
+    }
+
+    // Crear usuario si no existe
+    try {
+        let usuario = await crearUsuario(body);
+        res.json({
+            Creado: {
+                nombre: usuario.nombre,
+                email: usuario.email,
+            },
         });
+    } catch (err) {
+        res.status(400).json({ err });
+    }
 });
 
 // PUT: Actualizar usuario por email
-ruta.put("/:email", (req, res) => {
+ruta.put("/:email",  verificarToken,(req, res) => {
     const { error } = usuarioSchemaJoi.validate(req.body);
     if (error) {
         return res.status(400).json({ error: error.details[0].message });
@@ -88,7 +100,7 @@ ruta.put("/:email", (req, res) => {
 });
 
 // DELETE: Eliminar usuario físicamente por ID
-ruta.delete("/:id", (req, res) => {
+ruta.delete("/:id",  verificarToken,(req, res) => {
     let resultado = eliminarUsuario(req.params.id);
     resultado
         .then((usuario) => {
@@ -104,12 +116,15 @@ ruta.delete("/:id", (req, res) => {
 });
 
 // DELETE: Desactivar usuario (estado=false) por email
-ruta.delete("/desactivar/:email", (req, res) => {
+ruta.delete("/desactivar/:email",  verificarToken,(req, res) => {
     let resultado = desactivarUsuario(req.params.email);
     resultado
         .then((usuario) => {
             res.json({
-                desactivado: usuario,
+                desactivado: {
+                    nombre: usuario.nombre,
+                    email: usuario.email,
+                },
             });
         })
         .catch((err) => {
@@ -125,7 +140,7 @@ ruta.delete("/desactivar/:email", (req, res) => {
 
 // Servicio para listar usuarios activos
 async function listarUsuariosActivos() {
-    return await Usuario.find({ estado: true });
+    return await Usuario.find({ estado: true }).select({ nombre: 1, email: 1 });
 }
 
 // Servicio para crear un usuario en la base de datos
@@ -133,7 +148,7 @@ async function crearUsuario(body) {
     let usuario = new Usuario({
         email: body.email,
         nombre: body.nombre,
-        password: body.password,
+        password: bcrypt.hashSync(body.password, 10), // Encriptamos contraseña
     });
     return await usuario.save();
 }
